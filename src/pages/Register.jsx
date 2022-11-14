@@ -10,8 +10,73 @@ import {
   Anchor,
 } from "@mantine/core";
 import { showNotification } from "@mantine/notifications";
+import { addDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { fireDb } from "../firebaseConfig";
+import cryptojs from "crypto-js";
+import { useDispatch } from "react-redux";
+import { HideLoading, ShowLoading } from "../redux/alertsSlice";
 
 export const Register = () => {
+  const dispatch = useDispatch();
+  const registerForm = useForm({
+    initialValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  const onSubmit = async (event) => {
+    event.preventDefault();
+
+    try{
+      // check if user already exists based on email
+      dispatch(ShowLoading());
+      const qry = query(
+        collection(fireDb, "users"),
+        where("email", "==", registerForm.values.email)
+      );
+      const existingUsers = await getDocs(qry);
+
+      if (existingUsers.size > 0) {
+        console.log(existingUsers);
+        showNotification({
+          title: "User already exists",
+          color: "red",
+        });
+        return;
+      }else{
+         // encrypt password
+         const encryptedPassword = cryptojs.AES.encrypt(
+          registerForm.values.password,
+          "sbimoney-lite"
+        ).toString();
+        const response = await addDoc(collection(fireDb, "users"), {
+          ...registerForm.values,
+          password: encryptedPassword,
+        });
+        if (response.id) {
+          showNotification({
+            title: "User created successfully",
+            color: "green",
+          });
+        } else {
+          showNotification({
+            title: "Something went wrong",
+            color: "red",
+          });
+        }
+      }
+      dispatch(HideLoading());
+    }catch(error){
+      dispatch(HideLoading());
+      showNotification({
+        title: "Something went wrong",
+        color: "red",
+      });
+
+    }
+  }
   return (
     <div className="flex h-screen justify-center items-center auth">
       <Card
@@ -26,19 +91,21 @@ export const Register = () => {
           SBIMONEY - REGISTER
         </Title>
         <Divider variant="dotted" color="gray" />
-        <form>
+        <form action="" onSubmit={onSubmit}>
           <Stack>
-            <TextInput label="Name" placeholder="Enter your name" name="name" />
+            <TextInput label="Name" placeholder="Enter your name" name="name"  {...registerForm.getInputProps("name")}/>
             <TextInput
               label="Email"
               placeholder="Enter your email"
               name="email"
+              {...registerForm.getInputProps("email")}
             />
             <TextInput
               label="Password"
               placeholder="Enter your password"
               name="password"
               type="password"
+              {...registerForm.getInputProps("password")}
             />
             <Button>Register</Button>
             <Anchor href="/login" color="teal">
